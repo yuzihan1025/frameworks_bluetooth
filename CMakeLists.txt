@@ -82,10 +82,6 @@ if(CONFIG_BLUETOOTH)
     list(APPEND CSRCS ${BLUETOOTH_DIR}/service/common/storage.c)
   endif()
 
-  if(CONFIG_BLUETOOTH_DEBUG_TRACE)
-    list(APPEND CSRCS ${BLUETOOTH_DIR}/debug/bt_trace.c)
-  endif()
-
   list(APPEND CFLAGS -Wno-strict-prototypes)
 
   if(CONFIG_BLUETOOTH_SERVICE)
@@ -117,6 +113,10 @@ if(CONFIG_BLUETOOTH)
 
     if(CONFIG_LE_DLF_SUPPORT)
       list(APPEND CSRCS ${BLUETOOTH_DIR}/service/src/connection_manager_dlf.c)
+    endif()
+
+    if(CONFIG_BLUETOOTH_HCI_FILTER)
+      list(APPEND CSRCS ${BLUETOOTH_DIR}/service/vhal/bt_hci_filter.c)
     endif()
 
     file(GLOB APPEND_FILES ${BLUETOOTH_DIR}/service/stacks/*.c)
@@ -156,8 +156,11 @@ if(CONFIG_BLUETOOTH)
         list(APPEND CSRCS ${BLUETOOTH_DIR}/service/stacks/zephyr/sal_le_scan_interface.c)
       endif()
 
-      if(CONFIG_BLUETOOTH_GATT)
+      if(CONFIG_BLUETOOTH_GATT_CLIENT)
         list(APPEND CSRCS ${BLUETOOTH_DIR}/service/stacks/zephyr/sal_gatt_client_interface.c)
+      endif()
+
+      if(CONFIG_BLUETOOTH_GATT_SERVER)
         list(APPEND CSRCS ${BLUETOOTH_DIR}/service/stacks/zephyr/sal_gatt_server_interface.c)
       endif()
     endif()
@@ -191,9 +194,14 @@ if(CONFIG_BLUETOOTH)
          ${BLUETOOTH_DIR}/service/profiles/audio_interface/*.c)
     list(APPEND CSRCS ${APPEND_FILES})
 
-    if(CONFIG_BLUETOOTH_GATT)
-      file(GLOB APPEND_FILES ${BLUETOOTH_DIR}/service/profiles/gatt/*.c)
-      list(APPEND CSRCS ${APPEND_FILES})
+    if(CONFIG_BLUETOOTH_GATT_CLIENT)
+      list(APPEND CSRCS ${BLUETOOTH_DIR}/service/profiles/gatt/gattc_event.c)
+      list(APPEND CSRCS ${BLUETOOTH_DIR}/service/profiles/gatt/gattc_service.c)
+    endif()
+
+    if(CONFIG_BLUETOOTH_GATT_SERVER)
+      list(APPEND CSRCS ${BLUETOOTH_DIR}/service/profiles/gatt/gatts_event.c)
+      list(APPEND CSRCS ${BLUETOOTH_DIR}/service/profiles/gatt/gatts_service.c)
     endif()
 
     if(CONFIG_BLUETOOTH_A2DP)
@@ -321,7 +329,7 @@ if(CONFIG_BLUETOOTH)
     file(GLOB APPEND_FILES ${BLUETOOTH_DIR}/service/utils/*.c)
     list(APPEND CSRCS ${APPEND_FILES})
 
-    file(GLOB APPEND_FILES ${BLUETOOTH_DIR}/service/vhal/*.c)
+    file(GLOB APPEND_FILES ${BLUETOOTH_DIR}/service/vhal/bt_vhal.c)
     list(APPEND CSRCS ${APPEND_FILES})
 
     list(APPEND INCDIR ${BLUETOOTH_DIR}/service/vhal)
@@ -355,7 +363,6 @@ if(CONFIG_BLUETOOTH)
 
   if(CONFIG_BLUETOOTH_TOOLS)
     list(APPEND CSRCS ${BLUETOOTH_DIR}/tools/utils.c)
-    list(APPEND CSRCS ${BLUETOOTH_DIR}/tools/log.c)
 
     if(CONFIG_BLUETOOTH_FRAMEWORK_ASYNC)
       list(APPEND CSRCS ${BLUETOOTH_DIR}/tools/async/gap.c)
@@ -384,8 +391,11 @@ if(CONFIG_BLUETOOTH)
       list(APPEND CSRCS ${BLUETOOTH_DIR}/tools/avrcp_control.c)
     endif()
 
-    if(CONFIG_BLUETOOTH_GATT)
+    if(CONFIG_BLUETOOTH_GATT_CLIENT)
       list(APPEND CSRCS ${BLUETOOTH_DIR}/tools/gatt_client.c)
+    endif()
+
+    if(CONFIG_BLUETOOTH_GATT_SERVER)
       list(APPEND CSRCS ${BLUETOOTH_DIR}/tools/gatt_server.c)
     endif()
 
@@ -395,6 +405,11 @@ if(CONFIG_BLUETOOTH)
 
     if(CONFIG_BLUETOOTH_HFP_AG)
       list(APPEND CSRCS ${BLUETOOTH_DIR}/tools/hfp_ag.c)
+    endif()
+
+    if(ifeq ($(CONFIG_BLUETOOTH_LOG), y))
+        list(APPEND CSRCS ${BLUETOOTH_DIR}/tools/log.c)
+        list(APPEND CSRCS ${BLUETOOTH_DIR}/debug/bt_trace.c)
     endif()
 
     if(CONFIG_BLUETOOTH_SPP)

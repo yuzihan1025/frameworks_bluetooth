@@ -45,9 +45,12 @@ static int get_local_addr_cmd(void* handle, int argc, char** argv);
 static int get_appearance_cmd(void* handle, int argc, char** argv);
 static int set_appearance_cmd(void* handle, int argc, char** argv);
 static int set_le_addr_cmd(void* handle, int argc, char** argv);
+static int set_bondable_le_cmd(void* handle, int argc, char** argv);
+static int set_security_level_cmd(void* handle, int argc, char** argv);
 static int get_le_addr_cmd(void* handle, int argc, char** argv);
 static int set_identity_addr_cmd(void* handle, int argc, char** argv);
 static int set_scan_parameters_cmd(void* handle, int argc, char** argv);
+static int set_debug_mode_cmd(void* handle, int argc, char** argv);
 static int get_local_name_cmd(void* handle, int argc, char** argv);
 static int set_local_name_cmd(void* handle, int argc, char** argv);
 static int get_local_cod_cmd(void* handle, int argc, char** argv);
@@ -139,8 +142,8 @@ static struct option le_conn_options[] = {
                       "\t --min_ce_length, Range: 0x0000 to 0xFFFF\n"                                                           \
                       "\t --max_ce_length, Range: 0x0000 to 0xFFFF\n"
 
-#define INQUIRY_USAGE "inquiry device\n"                                          \
-                      "\t\t\t- start <timeout>(Range: 1-48, i.e., 1.28-61.44s)\n" \
+#define INQUIRY_USAGE "inquiry device\n"                                                                    \
+                      "\t\t\t- start <timeout>(Range: 1-48, i.e., 1.28-61.44s) [is_limited](Range: 0, 1)\n" \
                       "\t\t\t- stop"
 
 #define SET_LE_PHY_USAGE "set le tx and rx phy, params: <addr><txphy><rxphy>(0:1M, 1:2M, 2:CODED)"
@@ -196,8 +199,10 @@ static bt_command_t g_cmd_tables[] = {
 #ifdef CONFIG_BLUETOOTH_PAN
     { "pan", pan_command_exec, 0, "pan cmd,           input \'pan\' show usage" },
 #endif
-#ifdef CONFIG_BLUETOOTH_GATT
+#ifdef CONFIG_BLUETOOTH_GATT_CLIENT
     { "gattc", gattc_command_exec, 0, "gatt client cmd    input \'gattc\' show usage" },
+#endif
+#ifdef CONFIG_BLUETOOTH_GATT_SERVER
     { "gatts", gatts_command_exec, 0, "gatt server cmd    input \'gatts\' show usage" },
 #endif
 #ifdef CONFIG_BLUETOOTH_LEAUDIO_SERVER
@@ -225,7 +230,9 @@ static bt_command_t g_cmd_tables[] = {
     { "vmicp", vmicp_command_exec, 0, "vcp/micp client cmd, input \'vmicp\' show usage" },
 #endif
     { "dump", dump_cmd, 0, "dump adapter state" },
+#ifdef CONFIG_BLUETOOTH_LOG
     { "log", log_command, 0, "log control command" },
+#endif
     { "help", usage_cmd, 0, "Usage for bttools" },
     { "quit", quit_cmd, 0, "Quit" },
     { "q", quit_cmd, 0, "Quit" },
@@ -243,8 +250,11 @@ static bt_command_t g_set_cmd_tables[] = {
     { "class", set_local_cod_cmd, 0, SET_CLASS_USAGE },
     { "appearance", set_appearance_cmd, 0, "set le adapter appearance, params: <appearance>" },
     { "leaddr", set_le_addr_cmd, 0, "set ble adapter addr, params: <leaddr>" },
+    { "bondable", set_bondable_le_cmd, 0, "set LE bondable, params: <bondable>" },
+    { "security", set_security_level_cmd, 0, "set bond security level, params: <level> <transport>" },
     { "id", set_identity_addr_cmd, 0, "set ble identity addr, params: <identity addr> <addr type>" },
     { "scanparams", set_scan_parameters_cmd, 0, SET_SCANPARAMS_USAGE },
+    { "debug", set_debug_mode_cmd, 0, "set debug mode, params: <mode> (e.g. pts) <enable> (0: disable, 1: enable)" },
     { "help", NULL, 0, "show set help info" },
     //{ "", , "set " },
 };
@@ -309,8 +319,10 @@ static void bt_tool_init(void* handle)
 #ifdef CONFIG_BLUETOOTH_PAN
     pan_command_init(handle);
 #endif
-#ifdef CONFIG_BLUETOOTH_GATT
+#ifdef CONFIG_BLUETOOTH_GATT_CLIENT
     gattc_command_init(handle);
+#endif
+#ifdef CONFIG_BLUETOOTH_GATT_SERVER
     gatts_command_init(handle);
 #endif
 #ifdef CONFIG_BLUETOOTH_LEAUDIO_SERVER
@@ -372,8 +384,10 @@ static void bt_tool_uninit(void* handle)
 #ifdef CONFIG_BLUETOOTH_PAN
     pan_command_uninit(handle);
 #endif
-#ifdef CONFIG_BLUETOOTH_GATT
+#ifdef CONFIG_BLUETOOTH_GATT_CLIENT
     gattc_command_uninit(handle);
+#endif
+#ifdef CONFIG_BLUETOOTH_GATT_SERVER
     gatts_command_uninit(handle);
 #endif
 #ifdef CONFIG_BLUETOOTH_LEAUDIO_SERVER
@@ -418,7 +432,7 @@ static int enable_cmd(void* handle, int argc, char** argv)
 
 static int disable_cmd(void* handle, int argc, char** argv)
 {
-    bt_adapter_disable(handle);
+    bt_adapter_disable_safe(handle);
     return CMD_OK;
 }
 
@@ -430,6 +444,8 @@ static int get_state_cmd(void* handle, int argc, char** argv)
 
 static int discovery_cmd(void* handle, int argc, char** argv)
 {
+    int limited = 0;
+
     if (argc < 1)
         return CMD_PARAM_NOT_ENOUGH;
 
@@ -443,9 +459,19 @@ static int discovery_cmd(void* handle, int argc, char** argv)
             return CMD_INVALID_PARAM;
         }
 
-        PRINT("start discovery timeout:%d", timeout);
-        if (bt_adapter_start_discovery(handle, timeout) != BT_STATUS_SUCCESS)
+        if (argc >= 3) {
+            limited = atoi(argv[2]);
+        }
+
+        PRINT("start %s discovery timeout:%d", limited ? "limited" : "general", timeout);
+
+        if ((limited
+                    ? bt_adapter_start_limited_discovery(handle, timeout)
+                    : bt_adapter_start_discovery(handle, timeout))
+            != BT_STATUS_SUCCESS) {
             return CMD_ERROR;
+        }
+
     } else if (!strcmp(argv[0], "stop")) {
         if (bt_adapter_cancel_discovery(handle) != BT_STATUS_SUCCESS)
             return CMD_ERROR;
@@ -647,6 +673,44 @@ static int set_le_addr_cmd(void* handle, int argc, char** argv)
     return CMD_OK;
 }
 
+static int set_bondable_le_cmd(void* handle, int argc, char** argv)
+{
+    if (argc < 1)
+        return CMD_PARAM_NOT_ENOUGH;
+
+    bool bondable = atoi(argv[0]);
+
+    if (bt_device_set_bondable_le(handle, bondable) != BT_STATUS_SUCCESS)
+        return CMD_ERROR;
+
+    PRINT("bondable: %d set success", bondable);
+    return CMD_OK;
+}
+
+static int set_security_level_cmd(void* handle, int argc, char** argv)
+{
+    if (argc < 2)
+        return CMD_PARAM_NOT_ENOUGH;
+
+    if (strlen(argv[0]) > 1) {
+        return CMD_INVALID_PARAM;
+    }
+
+    uint8_t level = *argv[0] - '0';
+    if (level < 0 || level > 4)
+        return CMD_INVALID_PARAM;
+
+    int transport = atoi(argv[1]);
+    if (transport != BT_TRANSPORT_BREDR && transport != BT_TRANSPORT_BLE)
+        return CMD_INVALID_PARAM;
+
+    if (bt_device_set_security_level(handle, level, transport) != BT_STATUS_SUCCESS)
+        return CMD_ERROR;
+
+    PRINT("security level: %d, transport: %d", level, transport);
+    return CMD_OK;
+}
+
 static int get_le_addr_cmd(void* handle, int argc, char** argv)
 {
     bt_address_t addr;
@@ -702,6 +766,28 @@ static int set_scan_parameters_cmd(void* handle, int argc, char** argv)
         bt_adapter_set_inquiry_scan_parameters(handle, type, interval, window);
     else
         bt_adapter_set_page_scan_parameters(handle, type, interval, window);
+
+    return CMD_OK;
+}
+
+static int set_debug_mode_cmd(void* handle, int argc, char** argv)
+{
+    uint8_t mode, operation;
+
+    if (argc < 2)
+        return CMD_PARAM_NOT_ENOUGH;
+
+    if (!strncasecmp(argv[0], "pts", strlen("pts"))) {
+        mode = BT_DEBUG_MODE_PTS;
+    } else {
+        PRINT("error mode: %s", argv[0]);
+        return CMD_INVALID_PARAM;
+    }
+
+    operation = atoi(argv[1]);
+
+    if (bt_adapter_set_debug_mode(handle, mode, operation) != BT_STATUS_SUCCESS)
+        return CMD_ERROR;
 
     return CMD_OK;
 }

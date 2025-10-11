@@ -167,8 +167,10 @@ static bt_command_t g_async_cmd_tables[] = {
 #ifdef CONFIG_BLUETOOTH_PAN
     { "pan", pan_command_exec, 0, "pan cmd,           input \'pan\' show usage" },
 #endif
-#ifdef CONFIG_BLUETOOTH_GATT
+#ifdef CONFIG_BLUETOOTH_GATT_CLIENT
     { "gattc", gattc_command_exec, 0, "gatt client cmd    input \'gattc\' show usage" },
+#endif
+#ifdef CONFIG_BLUETOOTH_GATT_SERVER
     { "gatts", gatts_command_exec, 0, "gatt server cmd    input \'gatts\' show usage" },
 #endif
 #ifdef CONFIG_BLUETOOTH_LEAUDIO_SERVER
@@ -196,7 +198,9 @@ static bt_command_t g_async_cmd_tables[] = {
     { "vmicp", vmicp_command_exec, 0, "vcp/micp client cmd, input \'vmicp\' show usage" },
 #endif
     { "dump", dump_cmd, 0, "dump adapter state" },
+#ifdef CONFIG_BLUETOOTH_LOG
     { "log", log_command, 0, "log control command" },
+#endif
     { "help", usage_cmd, 0, "Usage for bttools" },
     { "quit", quit_cmd, 0, "Quit" },
     { "q", quit_cmd, 0, "Quit" },

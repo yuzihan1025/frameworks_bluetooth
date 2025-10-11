@@ -117,6 +117,21 @@ bt_status_t bt_adapter_disable(bt_instance_t* ins)
     return packet.adpt_r.status;
 }
 
+bt_status_t bt_adapter_disable_safe(bt_instance_t* ins)
+{
+    bt_message_packet_t packet;
+    bt_status_t status;
+
+    BT_SOCKET_INS_VALID(ins, BT_STATUS_PARM_INVALID);
+
+    status = bt_socket_client_sendrecv(ins, &packet, BT_ADAPTER_DISABLE_SAFE);
+    if (status != BT_STATUS_SUCCESS) {
+        return status;
+    }
+
+    return packet.adpt_r.status;
+}
+
 bt_status_t bt_adapter_enable_le(bt_instance_t* ins)
 {
     bt_message_packet_t packet;
@@ -216,6 +231,22 @@ bt_status_t bt_adapter_start_discovery(bt_instance_t* ins, uint32_t timeout)
 
     packet.adpt_pl._bt_adapter_start_discovery.v32 = timeout;
     status = bt_socket_client_sendrecv(ins, &packet, BT_ADAPTER_START_DISCOVERY);
+    if (status != BT_STATUS_SUCCESS) {
+        return status;
+    }
+
+    return packet.adpt_r.status;
+}
+
+bt_status_t bt_adapter_start_limited_discovery(bt_instance_t* ins, uint32_t timeout)
+{
+    bt_message_packet_t packet;
+    bt_status_t status;
+
+    BT_SOCKET_INS_VALID(ins, BT_STATUS_PARM_INVALID);
+
+    packet.adpt_pl._bt_adapter_start_limited_discovery.v32 = timeout;
+    status = bt_socket_client_sendrecv(ins, &packet, BT_ADAPTER_START_LIMITED_DISCOVERY);
     if (status != BT_STATUS_SUCCESS) {
         return status;
     }
@@ -453,6 +484,23 @@ bt_status_t bt_adapter_set_page_scan_parameters(bt_instance_t* ins, bt_scan_type
     packet.adpt_pl._bt_adapter_set_page_scan_parameters.interval = interval;
     packet.adpt_pl._bt_adapter_set_page_scan_parameters.window = window;
     status = bt_socket_client_sendrecv(ins, &packet, BT_ADAPTER_SET_PAGE_SCAN_PARAMETERS);
+    if (status != BT_STATUS_SUCCESS) {
+        return status;
+    }
+
+    return packet.adpt_r.status;
+}
+
+bt_status_t bt_adapter_set_debug_mode(bt_instance_t* ins, bt_debug_mode_t mode, uint8_t operation)
+{
+    bt_message_packet_t packet;
+    bt_status_t status;
+
+    BT_SOCKET_INS_VALID(ins, BT_STATUS_PARM_INVALID);
+
+    packet.adpt_pl._bt_adapter_set_debug_mode.mode = mode;
+    packet.adpt_pl._bt_adapter_set_debug_mode.operation = operation;
+    status = bt_socket_client_sendrecv(ins, &packet, BT_ADAPTER_SET_DEBUG_MODE);
     if (status != BT_STATUS_SUCCESS) {
         return status;
     }

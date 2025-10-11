@@ -47,6 +47,8 @@ typedef union {
         struct bt_conn_le_create_param create;
         struct bt_le_conn_param conn;
     } conn_param;
+    int security_level;
+    bool bondable;
 } sal_adapter_args_t;
 
 typedef struct {
@@ -81,6 +83,7 @@ static void zblue_on_phy_updated(struct bt_conn* conn, struct bt_conn_le_phy_inf
 #endif
 static void zblue_on_param_updated(struct bt_conn* conn, uint16_t interval, uint16_t latency, uint16_t timeout);
 
+#ifdef CONFIG_BT_SMP
 static void zblue_on_auth_passkey_display(struct bt_conn* conn, unsigned int passkey);
 static void zblue_on_auth_passkey_confirm(struct bt_conn* conn, unsigned int passkey);
 static void zblue_on_auth_passkey_entry(struct bt_conn* conn);
@@ -88,6 +91,7 @@ static void zblue_on_auth_cancel(struct bt_conn* conn);
 static void zblue_on_auth_pairing_confirm(struct bt_conn* conn);
 #ifdef CONFIG_BT_SMP_APP_PAIRING_ACCEPT
 static enum bt_security_err zblue_on_pairing_accept(struct bt_conn* conn, const struct bt_conn_pairing_feat* const feat);
+#endif
 #endif
 static void zblue_register_callback(void);
 static void zblue_unregister_callback(void);
@@ -98,7 +102,9 @@ static le_conn_info_t* le_conn_find(const bt_address_t* addr);
 static struct bt_conn_cb g_conn_cbs = {
     .connected = zblue_on_connected,
     .disconnected = zblue_on_disconnected,
+#ifdef CONFIG_BT_SMP
     .security_changed = zblue_on_security_changed,
+#endif
     .le_param_updated = zblue_on_param_updated,
 #if defined(CONFIG_BT_USER_PHY_UPDATE)
     .le_phy_updated = zblue_on_phy_updated,
@@ -113,6 +119,7 @@ static struct bt_conn_auth_info_cb g_conn_auth_info_cbs = {
 
 static struct bt_conn_auth_cb g_conn_auth_cbs;
 static le_conn_info_t g_le_conn_info[CONFIG_BT_MAX_CONN];
+static bt_security_t g_security_level = BT_SECURITY_L2;
 
 static uint8_t zblue_convert_addr_type(ble_addr_type_t addr_type)
 {
@@ -150,7 +157,9 @@ static void zblue_on_connected(struct bt_conn* conn, uint8_t err)
     uint8_t role;
     struct bt_conn_info info;
     le_conn_info_t* slot;
+#if defined(CONFIG_BLUETOOTH_GATT_CLIENT) || defined(CONFIG_BLUETOOTH_GATT_SERVER)
     profile_connection_state_t profile_state = PROFILE_STATE_CONNECTED;
+#endif
 
     bt_address_t le_addr;
     bt_address_t* remote_addr;
@@ -179,7 +188,9 @@ static void zblue_on_connected(struct bt_conn* conn, uint8_t err)
     if (err) {
         state.connection_state = CONNECTION_STATE_DISCONNECTED;
         state.status = err;
+#if defined(CONFIG_BLUETOOTH_GATT_CLIENT) || defined(CONFIG_BLUETOOTH_GATT_SERVER)
         profile_state = PROFILE_STATE_DISCONNECTED;
+#endif
 
         if (info.role == BT_HCI_ROLE_CENTRAL) {
             bt_conn_unref(conn);
@@ -207,11 +218,13 @@ static void zblue_on_connected(struct bt_conn* conn, uint8_t err)
     }
 
     adapter_on_connection_state_changed(&state);
-#ifdef CONFIG_BLUETOOTH_GATT
+#ifdef CONFIG_BLUETOOTH_GATT_SERVER
     if (role & GATT_ROLE_SERVER) {
         bt_sal_gatt_server_connection_state_changed_callback(PRIMARY_ADAPTER, &state.addr, profile_state);
     }
+#endif
 
+#ifdef CONFIG_BLUETOOTH_GATT_CLIENT
     if (role & GATT_ROLE_CLIENT) {
         bt_sal_gatt_client_connection_state_changed_callback(PRIMARY_ADAPTER, &state.addr, profile_state);
     }
@@ -286,11 +299,13 @@ static void zblue_on_disconnected(struct bt_conn* conn, uint8_t reason)
     slot = NULL;
 
     adapter_on_connection_state_changed(&state);
-#ifdef CONFIG_BLUETOOTH_GATT
+#ifdef CONFIG_BLUETOOTH_GATT_SERVER
     if (role & GATT_ROLE_SERVER) {
         bt_sal_gatt_server_connection_state_changed_callback(PRIMARY_ADAPTER, &state.addr, PROFILE_STATE_DISCONNECTED);
     }
+#endif
 
+#ifdef CONFIG_BLUETOOTH_GATT_CLIENT
     if (role & GATT_ROLE_CLIENT) {
         bt_sal_gatt_client_connection_state_changed_callback(PRIMARY_ADAPTER, &state.addr, PROFILE_STATE_DISCONNECTED);
     }
@@ -322,7 +337,7 @@ static void zblue_on_security_changed(struct bt_conn* conn, bt_security_t level,
         memcpy(&addr, &le_addr, sizeof(addr.addr));
     }
 
-    if (err) {
+    if (err && !adapter_get_pts_mode()) {
         adapter_on_bond_state_changed(&addr, BOND_STATE_NONE, BT_TRANSPORT_BLE, BT_STATUS_FAIL, false);
         BT_LOGD("%s, err: %d, remove old key", __func__, err);
         ret = bt_unpair(BT_ID_DEFAULT, info.le.dst);
@@ -356,7 +371,7 @@ static void zblue_on_param_updated(struct bt_conn* conn, uint16_t interval, uint
 
     BT_LOGD("%s, interval:%d, latency:%d, timeout:%d", __func__, interval, latency, timeout);
 
-#ifdef CONFIG_BLUETOOTH_GATT
+#if defined(CONFIG_BLUETOOTH_GATT_CLIENT)
     if (info.role == BT_HCI_ROLE_CENTRAL) {
         if_gattc_on_connection_parameter_updated(&addr, interval, latency, timeout, BT_STATUS_SUCCESS);
     }
@@ -478,7 +493,8 @@ static void zblue_on_pairing_failed(struct bt_conn* conn, enum bt_security_err r
 
     memcpy(&addr, info.le.dst->a.val, sizeof(addr));
     adapter_on_bond_state_changed(&addr, BOND_STATE_NONE, BT_TRANSPORT_BLE, BT_STATUS_AUTH_FAILURE, false);
-    bt_conn_disconnect(conn, BT_HCI_ERR_AUTH_FAIL);
+    if (!adapter_get_pts_mode())
+        bt_conn_disconnect(conn, BT_HCI_ERR_AUTH_FAIL);
 }
 
 static void zblue_on_bond_deleted(uint8_t id, const bt_addr_le_t* peer)
@@ -502,15 +518,19 @@ static void zblue_on_bond_deleted(uint8_t id, const bt_addr_le_t* peer)
 static void zblue_register_callback(void)
 {
     bt_conn_cb_register(&g_conn_cbs);
+#ifdef CONFIG_BT_SMP
     bt_conn_le_auth_cb_register(&g_conn_auth_cbs);
     bt_conn_auth_info_cb_register(&g_conn_auth_info_cbs);
+#endif
 }
 
 static void zblue_unregister_callback(void)
 {
     bt_conn_cb_unregister(&g_conn_cbs);
+#ifdef CONFIG_BT_SMP
     bt_conn_le_auth_cb_register(NULL);
     bt_conn_auth_info_cb_unregister(&g_conn_auth_info_cbs);
+#endif
 }
 
 static void zblue_on_ready_cb(bt_controller_id_t dev_id, int err)
@@ -668,9 +688,13 @@ bt_status_t le_conn_set_role(bt_address_t* addr, uint8_t flag)
 
         if (info->conn) {
             if ((info->role & GATT_ROLE_CLIENT) && flag == GATT_ROLE_SERVER) {
+#ifdef CONFIG_BLUETOOTH_GATT_SERVER
                 bt_sal_gatt_server_connection_state_changed_callback(PRIMARY_ADAPTER, &info->addr, PROFILE_STATE_CONNECTED);
+#endif
             } else if ((info->role & GATT_ROLE_SERVER) && flag == GATT_ROLE_CLIENT) {
+#ifdef CONFIG_BLUETOOTH_GATT_CLIENT
                 bt_sal_gatt_client_connection_state_changed_callback(PRIMARY_ADAPTER, &info->addr, PROFILE_STATE_CONNECTED);
+#endif
             }
             return BT_STATUS_DONE;
         }
@@ -749,6 +773,7 @@ bt_status_t bt_sal_le_disable(bt_controller_id_t id)
     return BT_STATUS_SUCCESS;
 }
 
+#ifdef CONFIG_BT_SMP
 static void zblue_on_auth_passkey_display(struct bt_conn* conn, unsigned int passkey)
 {
     bt_address_t addr;
@@ -823,9 +848,11 @@ static enum bt_security_err zblue_on_pairing_accept(struct bt_conn* conn, const 
     return BT_SECURITY_ERR_SUCCESS;
 }
 #endif /* CONFIG_BT_SMP_APP_PAIRING_ACCEPT */
+#endif /* CONFIG_BT_SMP */
 
 bt_status_t bt_sal_le_set_io_capability(bt_controller_id_t id, bt_io_capability_t cap)
 {
+#ifdef CONFIG_BT_SMP
     BT_LOGD("Set IO capability: %d", cap);
 
     memset(&g_conn_auth_cbs, 0, sizeof(g_conn_auth_cbs));
@@ -870,8 +897,12 @@ bt_status_t bt_sal_le_set_io_capability(bt_controller_id_t id, bt_io_capability_
     }
 
     return BT_STATUS_SUCCESS;
+#else
+    SAL_NOT_SUPPORT;
+#endif
 }
 
+#ifdef CONFIG_BT_SMP
 static void get_bonded_devices(const struct bt_bond_info* info, void* user_data)
 {
     device_context_t* ctx = user_data;
@@ -882,9 +913,11 @@ static void get_bonded_devices(const struct bt_bond_info* info, void* user_data)
     (*(ctx->cnt))++;
     ctx->props++;
 }
+#endif
 
 bt_status_t bt_sal_le_get_bonded_devices(bt_controller_id_t id, remote_device_le_properties_t* props, uint16_t* prop_cnt)
 {
+#ifdef CONFIG_BT_SMP
     device_context_t ctx = { 0 };
 
     ctx.props = props;
@@ -894,6 +927,9 @@ bt_status_t bt_sal_le_get_bonded_devices(bt_controller_id_t id, remote_device_le
     *prop_cnt = *ctx.cnt;
 
     return BT_STATUS_SUCCESS;
+#else
+    SAL_NOT_SUPPORT;
+#endif
 }
 
 bt_status_t bt_sal_le_set_static_identity(bt_controller_id_t id, bt_address_t* addr)
@@ -935,6 +971,25 @@ bt_status_t bt_sal_le_set_bonded_devices(bt_controller_id_t id, remote_device_le
     SAL_NOT_SUPPORT;
 }
 
+static void STACK_CALL(security_connect)(void* args)
+{
+    sal_adapter_req_t* req = args;
+    struct bt_conn* conn;
+    int err;
+
+    conn = get_le_conn_from_addr(&req->addr);
+    if (!conn) {
+        BT_LOGE("%s, conn null", __func__);
+        return;
+    }
+
+    err = bt_conn_set_security(conn, g_security_level);
+    if (err) {
+        BT_LOGE("%s, start le encryption fail err:%d", __func__, err);
+        return;
+    }
+}
+
 static void STACK_CALL(conn_connect)(void* args)
 {
     sal_adapter_req_t* req = args;
@@ -956,6 +1011,16 @@ bt_status_t bt_sal_le_connect(bt_controller_id_t id, bt_address_t* addr, ble_add
 {
     sal_adapter_req_t* req;
     uint8_t type;
+
+    if (get_le_conn_from_addr(addr)) {
+        req = sal_adapter_req(id, addr, STACK_CALL(security_connect));
+        if (!req) {
+            BT_LOGE("%s, req null", __func__);
+            return BT_STATUS_NOMEM;
+        }
+
+        return sal_send_req(req);
+    }
 
     req = sal_adapter_req(id, addr, STACK_CALL(conn_connect));
     if (!req) {
@@ -1033,6 +1098,29 @@ bt_status_t bt_sal_le_disconnect(bt_controller_id_t id, bt_address_t* addr)
     return sal_send_req(req);
 }
 
+static void STACK_CALL(set_bondable)(void* args)
+{
+    sal_adapter_req_t* req = args;
+
+    bt_set_bondable_mc(req->id, req->adpt.bondable);
+}
+
+bt_status_t bt_sal_le_set_bondable(bt_controller_id_t id, bool enable)
+{
+    sal_adapter_req_t* req;
+
+    req = sal_adapter_req(id, NULL, STACK_CALL(set_bondable));
+    if (!req) {
+        BT_LOGE("%s, req null", __func__);
+        return BT_STATUS_NOMEM;
+    }
+
+    req->adpt.bondable = enable;
+
+    return sal_send_req(req);
+}
+
+#ifdef CONFIG_BT_SMP
 static void STACK_CALL(create_bond)(void* args)
 {
     sal_adapter_req_t* req = args;
@@ -1045,15 +1133,17 @@ static void STACK_CALL(create_bond)(void* args)
         return;
     }
 
-    err = bt_conn_set_security(conn, BT_SECURITY_L2);
+    err = bt_conn_set_security(conn, g_security_level);
     if (err) {
         BT_LOGE("%s, bond fail err:%d", __func__, err);
         return;
     }
 }
+#endif
 
 bt_status_t bt_sal_le_create_bond(bt_controller_id_t id, bt_address_t* addr, ble_addr_type_t type)
 {
+#ifdef CONFIG_BT_SMP
     sal_adapter_req_t* req;
 
     req = sal_adapter_req(id, addr, STACK_CALL(create_bond));
@@ -1061,6 +1151,31 @@ bt_status_t bt_sal_le_create_bond(bt_controller_id_t id, bt_address_t* addr, ble
         BT_LOGE("%s, req null", __func__);
         return BT_STATUS_NOMEM;
     }
+
+    return sal_send_req(req);
+#else
+    return BT_STATUS_NOT_SUPPORTED;
+#endif
+}
+
+static void STACK_CALL(set_security_level)(void* args)
+{
+    sal_adapter_req_t* req = args;
+
+    g_security_level = req->adpt.security_level;
+}
+
+bt_status_t bt_sal_le_set_security_level(bt_controller_id_t id, uint8_t level)
+{
+    sal_adapter_req_t* req;
+
+    req = sal_adapter_req(id, NULL, STACK_CALL(set_security_level));
+    if (!req) {
+        BT_LOGE("%s, req null", __func__);
+        return BT_STATUS_NOMEM;
+    }
+
+    req->adpt.security_level = level;
 
     return sal_send_req(req);
 }
@@ -1071,6 +1186,7 @@ static void zblue_convert_le_addr(bt_address_t* addr, ble_addr_type_t type, bt_a
     memcpy(le_addr->a.val, addr, sizeof(addr->addr));
 }
 
+#ifdef CONFIG_BT_SMP
 static void STACK_CALL(remove_bond)(void* args)
 {
     sal_adapter_req_t* req = args;
@@ -1100,9 +1216,11 @@ static void STACK_CALL(remove_bond)(void* args)
         return;
     }
 }
+#endif
 
 bt_status_t bt_sal_le_remove_bond(bt_controller_id_t id, bt_address_t* addr)
 {
+#ifdef CONFIG_BT_SMP
     sal_adapter_req_t* req;
 
     req = sal_adapter_req(id, addr, STACK_CALL(remove_bond));
@@ -1112,10 +1230,14 @@ bt_status_t bt_sal_le_remove_bond(bt_controller_id_t id, bt_address_t* addr)
     }
 
     return sal_send_req(req);
+#else
+    return BT_STATUS_NOT_SUPPORTED;
+#endif
 }
 
 bt_status_t bt_sal_le_smp_reply(bt_controller_id_t id, bt_address_t* addr, bool accept, bt_pair_type_t type, uint32_t passkey)
 {
+#ifdef CONFIG_BT_SMP
     struct bt_conn* conn;
 
     conn = get_le_conn_from_addr(addr);
@@ -1145,6 +1267,9 @@ bt_status_t bt_sal_le_smp_reply(bt_controller_id_t id, bt_address_t* addr, bool 
 
     BT_LOGD("%s, accept", __func__);
     return BT_STATUS_SUCCESS;
+#else
+    SAL_NOT_SUPPORT;
+#endif
 }
 
 bt_status_t bt_sal_le_set_legacy_tk(bt_controller_id_t id, bt_address_t* addr, bt_128key_t tk_val)

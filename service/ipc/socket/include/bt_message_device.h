@@ -69,6 +69,11 @@ BT_DEVICE_MESSAGE_START,
 
 #define BT_IPC_CODE_COMMAND_DEVICE_BEGIN BT_IPC_CODE(BT_IPC_CODE_TYPE_COMMAND, BT_IPC_CODE_GROUP_DEVICE, 0)
 // TODO: Add new BT IPC Code sequentially
+#define BT_DEVICE_SUBCODE_SET_SECURITY_LEVEL 1
+#define BT_DEVICE_SET_SECURITY_LEVEL BT_IPC_CODE(BT_IPC_CODE_TYPE_COMMAND, BT_IPC_CODE_GROUP_DEVICE, BT_DEVICE_SUBCODE_SET_SECURITY_LEVEL)
+#define BT_DEVICE_SUBCODE_SET_BONDABLE_LE 2
+#define BT_DEVICE_SET_BONDABLE_LE BT_IPC_CODE(BT_IPC_CODE_TYPE_COMMAND, BT_IPC_CODE_GROUP_DEVICE, BT_DEVICE_SUBCODE_SET_BONDABLE_LE)
+
 #define BT_IPC_CODE_COMMAND_DEVICE_END BT_IPC_CODE(BT_IPC_CODE_TYPE_COMMAND, BT_IPC_CODE_GROUP_DEVICE, BT_IPC_CODE_SUBCODE_MAX_NUM)
 
 #define BT_IPC_CODE_CALLBACK_DEVICE_BEGIN BT_IPC_CODE(BT_IPC_CODE_TYPE_CALLBACK, BT_IPC_CODE_GROUP_DEVICE, 0)
@@ -124,6 +129,11 @@ BT_DEVICE_MESSAGE_START,
         } _bt_device_get_uuids;
 
         struct {
+            uint8_t transport; /* bt_transport_t */
+            uint8_t level; /* range: 0 ~ 4 */
+        } _bt_device_set_security_level;
+
+        struct {
             char alias[64];
             uint32_t length;
             bt_address_t addr;
@@ -150,7 +160,8 @@ BT_DEVICE_MESSAGE_START,
         struct {
             bt_address_t addr;
             uint8_t accept; /* boolean */
-        } _bt_device_pair_request_reply;
+        } _bt_device_pair_request_reply,
+            _bt_device_set_bondable_le;
 
         struct {
             bt_address_t addr;

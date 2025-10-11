@@ -19,32 +19,159 @@ include $(APPDIR)/Make.defs
 ifeq ($(CONFIG_BLUETOOTH), y)
 
 CSRCS += framework/common/*.c
+CSRCS += framework/api/bluetooth.c
+CSRCS += framework/api/bt_adapter.c
+CSRCS += framework/api/bt_device.c
 
-ifeq ($(CONFIG_BLUETOOTH_FRAMEWORK), y)
-ifeq ($(CONFIG_BLUETOOTH_FRAMEWORK_LOCAL), y)
-	CSRCS += framework/api/*.c
-ifeq ($(CONFIG_BLUETOOTH_BLE_AUDIO),)
-  CSRCS := $(filter-out $(wildcard framework/api/bt_lea*),$(wildcard $(CSRCS)))
+ifeq ($(CONFIG_BLUETOOTH_A2DP_SINK), y)
+CSRCS += framework/api/bt_a2dp_sink.c
+endif #CONFIG_BLUETOOTH_A2DP_SINK
+ifeq ($(CONFIG_BLUETOOTH_A2DP_SOURCE), y)
+CSRCS += framework/api/bt_a2dp_source.c
+endif #CONFIG_BLUETOOTH_A2DP_SOURCE
+ifeq ($(CONFIG_BLUETOOTH_AVRCP_TARGET), y)
+CSRCS += framework/api/bt_avrcp_target.c
+endif #CONFIG_BLUETOOTH_AVRCP_TARGET
+ifeq ($(CONFIG_BLUETOOTH_AVRCP_CONTROL), y)
+CSRCS += framework/api/bt_avrcp_control.c
+endif #CONFIG_BLUETOOTH_AVRCP_CONTROL
+ifeq ($(CONFIG_BLUETOOTH_HFP_HF), y)
+CSRCS += framework/api/bt_hfp_hf.c
+endif #CONFIG_BLUETOOTH_HFP_HF
+ifeq ($(CONFIG_BLUETOOTH_HFP_AG), y)
+CSRCS += framework/api/bt_hfp_ag.c
+endif #CONFIG_BLUETOOTH_HFP_AG
+ifeq ($(CONFIG_BLUETOOTH_SPP), y)
+CSRCS += framework/api/bt_spp.c
+endif #CONFIG_BLUETOOTH_SPP
+ifeq ($(CONFIG_BLUETOOTH_HID_DEVICE), y)
+CSRCS += framework/api/bt_hid_device.c
+endif #CONFIG_BLUETOOTH_HID_DEVICE
+ifeq ($(CONFIG_BLUETOOTH_GATT_CLIENT), y)
+CSRCS += framework/api/bt_gattc.c
+endif #CONFIG_BLUETOOTH_GATT_CLIENT
+ifeq ($(CONFIG_BLUETOOTH_GATT_SERVER), y)
+CSRCS += framework/api/bt_gatts.c
+endif #CONFIG_BLUETOOTH_GATT_SERVER
+ifeq ($(CONFIG_BLUETOOTH_L2CAP), y)
+CSRCS += framework/api/bt_l2cap.c
+endif #CONFIG_BLUETOOTH_L2CAP
+ifeq ($(CONFIG_BLUETOOTH_BLE_ADV), y)
+CSRCS += framework/api/bt_le_advertiser.c
+endif #CONFIG_BLUETOOTH_BLE_ADV
+ifeq ($(CONFIG_BLUETOOTH_BLE_SCAN), y)
+CSRCS += framework/api/bt_le_scan.c
+endif #CONFIG_BLUETOOTH_BLE_SCAN
+ifeq ($(CONFIG_BLUETOOTH_LOG), y)
+CSRCS += framework/api/bt_trace.c
 endif
-else ifeq ($(CONFIG_BLUETOOTH_FRAMEWORK_SOCKET_IPC), y)
-	CSRCS += framework/api/*.c
-ifeq ($(CONFIG_BLUETOOTH_BLE_AUDIO),)
-  CSRCS := $(filter-out $(wildcard framework/api/bt_lea*),$(wildcard $(CSRCS)))
-endif
-	CSRCS += service/ipc/*.c
-	CSRCS += service/ipc/socket/src/*.c
-	CSRCS += framework/socket/*.c
-  CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/frameworks/connectivity/bluetooth/service/ipc/socket/include
+ifeq ($(CONFIG_BLUETOOTH_PAN), y)
+CSRCS += framework/api/bt_pan.c
+endif #CONFIG_BLUETOOTH_PAN
+ifeq ($(CONFIG_BLUETOOTH_BLE_AUDIO), y)
+CSRCS := framework/api/bt_lea*.c
+endif #CONFIG_BLUETOOTH_BLE_AUDIO
+
+ifeq ($(CONFIG_BLUETOOTH_FRAMEWORK_SOCKET_IPC), y)
+CSRCS += service/ipc/bluetooth_ipc.c
+CSRCS += framework/socket/bt_device.c
+CSRCS += framework/socket/bt_adapter.c
+CSRCS += framework/socket/bluetooth.c
+CSRCS += service/ipc/socket/src/bt_socket.c
+CSRCS += service/ipc/socket/src/bt_socket_manager.c
+CSRCS += service/ipc/socket/src/bt_socket_client.c
+CSRCS += service/ipc/socket/src/bt_socket_server.c
+CSRCS += service/ipc/socket/src/bt_socket_device.c
+CSRCS += service/ipc/socket/src/bt_socket_adapter.c
+CSRCS += service/ipc/socket/src/bt_socket_bluetooth.c
+
+ifeq ($(CONFIG_BLUETOOTH_A2DP_SINK), y)
+CSRCS += framework/socket/bt_a2dp_sink.c
+CSRCS += service/ipc/socket/src/bt_socket_a2dp_sink.c
+endif #CONFIG_BLUETOOTH_A2DP_SINK
+
+ifeq ($(CONFIG_BLUETOOTH_A2DP_SOURCE), y)
+CSRCS += framework/socket/bt_a2dp_source.c
+CSRCS += service/ipc/socket/src/bt_socket_a2dp_source.c
+endif #CONFIG_BLUETOOTH_A2DP_SOURCE
+
+ifeq ($(CONFIG_BLUETOOTH_AVRCP_TARGET), y)
+CSRCS += framework/socket/bt_avrcp_target.c
+CSRCS += service/ipc/socket/src/bt_socket_avrcp_target.c
+endif #CONFIG_BLUETOOTH_AVRCP_TARGET
+
+ifeq ($(CONFIG_BLUETOOTH_AVRCP_CONTROL), y)
+CSRCS += framework/socket/bt_avrcp_control.c
+CSRCS += service/ipc/socket/src/bt_socket_avrcp_control.c
+endif #CONFIG_BLUETOOTH_AVRCP_CONTROL
+
+ifeq ($(CONFIG_BLUETOOTH_HFP_HF), y)
+CSRCS += framework/socket/bt_hfp_hf.c
+CSRCS += service/ipc/socket/src/bt_socket_hfp_hf.c
+endif #CONFIG_BLUETOOTH_HFP_HF
+
+ifeq ($(CONFIG_BLUETOOTH_HFP_AG), y)
+CSRCS += framework/socket/bt_hfp_ag.c
+CSRCS += service/ipc/socket/src/bt_socket_hfp_ag.c
+endif #CONFIG_BLUETOOTH_HFP_AG
+
+ifeq ($(CONFIG_BLUETOOTH_SPP), y)
+CSRCS += framework/socket/bt_spp.c
+CSRCS += service/ipc/socket/src/bt_socket_spp.c
+endif #CONFIG_BLUETOOTH_SPP
+
+ifeq ($(CONFIG_BLUETOOTH_HID_DEVICE), y)
+CSRCS += framework/socket/bt_hid_device.c
+CSRCS += service/ipc/socket/src/bt_socket_hid_device.c
+endif #CONFIG_BLUETOOTH_HID_DEVICE
+
+ifeq ($(CONFIG_BLUETOOTH_GATT_CLIENT), y)
+CSRCS += framework/socket/bt_gattc.c
+CSRCS += service/ipc/socket/src/bt_socket_gattc.c
+endif #CONFIG_BLUETOOTH_GATT_CLIENT
+
+ifeq ($(CONFIG_BLUETOOTH_GATT_SERVER), y)
+CSRCS += framework/socket/bt_gatts.c
+CSRCS += service/ipc/socket/src/bt_socket_gatts.c
+endif #CONFIG_BLUETOOTH_GATT_SERVER
+
+ifeq ($(CONFIG_BLUETOOTH_L2CAP), y)
+CSRCS += framework/socket/bt_l2cap.c
+CSRCS += service/ipc/socket/src/bt_socket_l2cap.c
+endif #CONFIG_BLUETOOTH_L2CAP
+
+ifeq ($(CONFIG_BLUETOOTH_BLE_ADV), y)
+CSRCS += framework/socket/bt_le_advertiser.c
+CSRCS += service/ipc/socket/src/bt_socket_advertiser.c
+endif #CONFIG_BLUETOOTH_BLE_ADV
+
+ifeq ($(CONFIG_BLUETOOTH_BLE_SCAN), y)
+CSRCS += framework/socket/bt_le_scan.c
+CSRCS += service/ipc/socket/src/bt_socket_scan.c
+endif #CONFIG_BLUETOOTH_BLE_SCAN
+
+ifeq ($(CONFIG_BLUETOOTH_PAN), y)
+CSRCS += framework/socket/bt_pan.c
+CSRCS += service/ipc/socket/src/bt_socket_pan.c
+endif #CONFIG_BLUETOOTH_PAN
+
+ifeq ($(CONFIG_BLUETOOTH_LOG), y)
+CSRCS += framework/socket/bt_trace.c
+CSRCS += service/ipc/socket/src/bt_socket_log.c
+endif #CONFIG_BLUETOOTH_BLE_AUDIO
+
+CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/frameworks/connectivity/bluetooth/service/ipc/socket/include
 ifeq ($(CONFIG_BLUETOOTH_FRAMEWORK_ASYNC), y)
-	CSRCS += framework/socket/async/*.c
+CSRCS += framework/socket/async/*.c
 endif #CONFIG_BLUETOOTH_FRAMEWORK_ASYNC
-else
-endif
-endif
+endif #CONFIG_BLUETOOTH_FRAMEWORK_SOCKET_IPC
 
-CSRCS += service/src/connection_manager.c
 CSRCS += service/src/manager_service.c
 CSRCS += service/common/index_allocator.c
+
+ifeq ($(CONFIG_BLUETOOTH_CONNECTION_MANAGER), y)
+CSRCS += service/src/connection_manager.c
+endif #CONFIG_BLUETOOTH_CONNECTION_MANAGER
 
 ifeq ($(CONFIG_BLUETOOTH_STORAGE_PROPERTY_SUPPORT), y)
 CSRCS += service/common/storage_property.c
@@ -56,7 +183,7 @@ ifeq ($(CONFIG_BLUETOOTH_DEBUG_MEMORY),y)
 CSRCS += debug/bt_memory.c
 endif
 
-ifeq ($(CONFIG_BLUETOOTH_DEBUG_TRACE), y)
+ifeq ($(CONFIG_BLUETOOTH_LOG), y)
 CSRCS += service/debug/bt_trace.c
 endif
 
@@ -66,7 +193,9 @@ ifeq ($(CONFIG_BLUETOOTH_SERVICE), y)
 	CSRCS += service/src/adapter_state.c
 	CSRCS += service/src/btservice.c
 	CSRCS += service/src/device.c
+	ifeq ($(CONFIG_BLUETOOTH_BREDR_SUPPORT), y)
 	CSRCS += service/src/power_manager.c
+	endif #CONFIG_BLUETOOTH_BREDR_SUPPORT
 	CSRCS += service/vendor/bt_vendor.c
 	CSRCS += service/src/hci_parser.c
 ifeq ($(CONFIG_BLUETOOTH_BLE_ADV), y)
@@ -91,7 +220,9 @@ ifneq ($(CONFIG_BLUETOOTH_STACK_BREDR_ZBLUE)$(CONFIG_BLUETOOTH_STACK_LE_ZBLUE),)
 	CSRCS += service/stacks/zephyr/sal_debug_interface.c
 	CSRCS += service/stacks/zephyr/sal_zblue.c
 	CSRCS += service/stacks/zephyr/sal_adapter_interface.c
+	ifeq ($(CONFIG_BLUETOOTH_CONNECTION_MANAGER), y)
 	CSRCS += service/stacks/zephyr/sal_connection_manager.c
+	endif
 ifeq ($(CONFIG_BLUETOOTH_A2DP), y)
 	CSRCS += service/stacks/zephyr/sal_a2dp_interface.c
 endif #CONFIG_BLUETOOTH_A2DP
@@ -107,10 +238,12 @@ endif #CONFIG_BLUETOOTH_BLE_ADV
 ifeq ($(CONFIG_BLUETOOTH_BLE_SCAN), y)
 	CSRCS += service/stacks/zephyr/sal_le_scan_interface.c
 endif #CONFIG_BLUETOOTH_BLE_SCAN
-ifeq ($(CONFIG_BLUETOOTH_GATT), y)
+ifeq ($(CONFIG_BLUETOOTH_GATT_CLIENT), y)
 	CSRCS += service/stacks/zephyr/sal_gatt_client_interface.c
+endif #CONFIG_BLUETOOTH_GATT_CLIENT
+ifeq ($(CONFIG_BLUETOOTH_GATT_SERVER), y)
 	CSRCS += service/stacks/zephyr/sal_gatt_server_interface.c
-endif #CONFIG_BLUETOOTH_GATT
+endif #CONFIG_BLUETOOTH_GATT_SERVER
 endif #CONFIG_BLUETOOTH_STACK_LE_ZBLUE
 
 endif
@@ -129,9 +262,14 @@ ifeq ($(CONFIG_MICO_MEDIA_MAIN_PLAYER),y)
 	CFLAGS += ${INCDIR_PREFIX}${TOPDIR}/../vendor/xiaomi/miai/mediaplayer/include
 endif #CONFIG_MICO_MEDIA_MAIN_PLAYER
 	CSRCS += service/profiles/audio_interface/*.c
-ifeq ($(CONFIG_BLUETOOTH_GATT), y)
-	CSRCS += service/profiles/gatt/*.c
-endif #CONFIG_BLUETOOTH_GATT
+ifeq ($(CONFIG_BLUETOOTH_GATT_CLIENT), y)
+	CSRCS += service/profiles/gatt/gattc_event.c
+	CSRCS += service/profiles/gatt/gattc_service.c
+endif #CONFIG_BLUETOOTH_GATT_CLIENT
+ifeq ($(CONFIG_BLUETOOTH_GATT_SERVER), y)
+	CSRCS += service/profiles/gatt/gatts_event.c
+	CSRCS += service/profiles/gatt/gatts_service.c
+endif #CONFIG_BLUETOOTH_GATT_SERVER
 
 ifeq ($(CONFIG_BLUETOOTH_A2DP), y)
   CSRCS += service/profiles/a2dp/*.c
@@ -216,8 +354,18 @@ ifeq ($(CONFIG_BLUETOOTH_LEAUDIO_VMICP), y)
 	CSRCS += service/profiles/leaudio/vmicp/*.c
 endif #CONFIG_BLUETOOTH_LEAUDIO_VMICP
 
-CSRCS += service/utils/*.c
-CSRCS += service/vhal/*.c
+ifeq ($(CONFIG_BLUETOOTH_LOG), y)
+CSRCS += service/utils/log_server.c
+CSRCS += service/utils/btsnoop_log.c
+CSRCS += service/utils/btsnoop_writer.c
+CSRCS += service/utils/btsnoop_filter.c
+endif #CONFIG_BLUETOOTH_LOG
+
+ifeq ($(CONFIG_BLUETOOTH_HCI_FILTER), y)
+CSRCS += service/vhal/bt_hci_filter.c
+endif
+
+CSRCS += service/vhal/bt_vhal.c
 CFLAGS += ${INCDIR_PREFIX}$(APPDIR)/frameworks/connectivity/bluetooth/service/vhal
 endif #CONFIG_BLUETOOTH_SERVICE
 
@@ -245,7 +393,6 @@ endif #CONFIG_APP_BT_SAMPLE_CODE
 
 ifeq ($(CONFIG_BLUETOOTH_TOOLS), y)
 	CSRCS += tools/utils.c
-	CSRCS += tools/log.c
 	CSRCS += tools/uv_thread_loop.c
 ifeq ($(CONFIG_BLUETOOTH_FRAMEWORK_ASYNC), y)
 	CSRCS += tools/async/gap.c
@@ -268,10 +415,12 @@ endif #CONFIG_BLUETOOTH_A2DP_SOURCE
 ifeq ($(CONFIG_BLUETOOTH_AVRCP_CONTROL), y)
 	CSRCS += tools/avrcp_control.c
 endif #CONFIG_BLUETOOTH_AVRCP_CONTROL
-ifeq ($(CONFIG_BLUETOOTH_GATT), y)
+ifeq ($(CONFIG_BLUETOOTH_GATT_CLIENT), y)
 	CSRCS += tools/gatt_client.c
+endif #CONFIG_BLUETOOTH_GATT_CLIENT
+ifeq ($(CONFIG_BLUETOOTH_GATT_SERVER), y)
 	CSRCS += tools/gatt_server.c
-endif #CONFIG_BLUETOOTH_GATT
+endif #CONFIG_BLUETOOTH_GATT_SERVER
 ifeq ($(CONFIG_BLUETOOTH_HFP_HF), y)
 	CSRCS += tools/hfp_hf.c
 endif #CONFIG_BLUETOOTH_HFP_HF
@@ -279,7 +428,9 @@ endif #CONFIG_BLUETOOTH_HFP_HF
 ifeq ($(CONFIG_BLUETOOTH_HFP_AG), y)
 	CSRCS += tools/hfp_ag.c
 endif #CONFIG_BLUETOOTH_HFP_AG
-
+ifeq ($(CONFIG_BLUETOOTH_LOG), y)
+CSRCS += tools/log.c
+endif #CONFIG_BLUETOOTH_LOG
 ifeq ($(CONFIG_BLUETOOTH_SPP), y)
 	CSRCS += tools/spp.c
 endif

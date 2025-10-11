@@ -97,6 +97,7 @@ typedef struct adapter_service {
     pthread_mutex_t adapter_lock;
     bt_adapter_state_t adapter_state;
     bool is_discovering;
+    bool is_pts_mode;
     uint8_t max_acl_connections;
     callbacks_list_t* adapter_callbacks;
     int adapter_state_adv;
@@ -287,6 +288,21 @@ static void adapter_delete_device(void* data)
     }
 
     device_delete(device);
+}
+
+static bool adapter_check_acl_all_disconnected(void)
+{
+    bt_device_t* device;
+    bt_list_node_t* node;
+
+    for (node = bt_list_head(g_adapter_service.devices); node != NULL; node = bt_list_next(g_adapter_service.devices, node)) {
+        device = (bt_device_t*)bt_list_node(node);
+        if (device_is_connected(device)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 static adapter_remote_event_t* create_remote_event(bt_address_t* addr, uint8_t evt_id)
@@ -895,6 +911,7 @@ static void bt_dfx_connection_state_changed(uint32_t hci_reason_code, uint8_t tr
 static void process_connection_state_changed_evt(bt_address_t* addr, acl_state_param_t* acl_params)
 {
     bt_device_t* device;
+    adapter_service_t* adapter = &g_adapter_service;
 
     BT_ADDR_LOG("ACL connection state changed, addr:%s, link:%d, state:%s, status:%d, reason:%" PRIu32 "", addr,
         acl_params->transport, acl_connection_str(acl_params->connection_state),
@@ -930,6 +947,7 @@ static void process_connection_state_changed_evt(bt_address_t* addr, acl_state_p
     }
     adapter_unlock();
 
+#ifdef CONFIG_BLUETOOTH_BREDR_SUPPORT
     if (acl_params->transport == BT_TRANSPORT_BREDR) {
         switch (acl_params->connection_state) {
         case CONNECTION_STATE_CONNECTED:
@@ -942,15 +960,25 @@ static void process_connection_state_changed_evt(bt_address_t* addr, acl_state_p
             break;
         }
     }
+#endif
 
     bt_dfx_connection_state_changed(acl_params->hci_reason_code, acl_params->transport);
 
+#ifdef CONFIG_BLUETOOTH_CONNECTION_MANAGER
     if (acl_params->connection_state == CONNECTION_STATE_DISCONNECTED)
         bt_cm_process_disconnect_event(addr, acl_params->transport, acl_params->hci_reason_code);
+#endif
 
     /* send connection changed notification */
     CALLBACK_FOREACH(CBLIST, adapter_callbacks_t, on_connection_state_changed, addr,
         acl_params->transport, acl_params->connection_state);
+
+    /* check acls connection is all disconnected in safe disable mode */
+    if (acl_params->connection_state == CONNECTION_STATE_DISCONNECTED) {
+        if (adapter_check_acl_all_disconnected()) {
+            send_to_state_machine((state_machine_t*)adapter->stm, BREDR_ACL_ALL_DISCONNECTED, NULL);
+        }
+    }
 }
 
 static void handle_connection_event(void* data)
@@ -1862,6 +1890,16 @@ bt_status_t adapter_disable(uint8_t opt)
     return BT_STATUS_SUCCESS;
 }
 
+bt_status_t adapter_disable_safe(uint8_t opt)
+{
+    adapter_service_t* adapter = &g_adapter_service;
+
+    if (opt == SYS_SET_BT_ALL)
+        send_to_state_machine((state_machine_t*)adapter->stm, SYS_TURN_OFF_SAFE, NULL);
+
+    return BT_STATUS_SUCCESS;
+}
+
 void adapter_cleanup(void)
 {
     adapter_service_t* adapter = &g_adapter_service;
@@ -1928,7 +1966,34 @@ bt_status_t adapter_set_discovery_filter(void)
     return BT_STATUS_NOT_SUPPORTED;
 }
 
-bt_status_t adapter_start_discovery(uint32_t timeout)
+static void adapter_remove_found_devices()
+{
+    bt_list_t* list = g_adapter_service.devices;
+    bt_list_node_t* node;
+    bt_list_node_t* next_node;
+
+    for (node = bt_list_head(list); node != NULL; node = next_node) {
+        bt_device_t* device;
+
+        next_node = bt_list_next(list, node);
+        device = bt_list_node(node);
+        if (device == NULL) {
+            continue;
+        }
+
+        if (device_is_bonded(device)) {
+            continue;
+        }
+
+        if (device_is_connected(device)) {
+            continue;
+        }
+
+        bt_list_remove_node(list, node);
+    }
+}
+
+bt_status_t adapter_start_discovery(uint32_t timeout, bool is_limited)
 {
     adapter_service_t* adapter = &g_adapter_service;
 
@@ -1945,7 +2010,9 @@ bt_status_t adapter_start_discovery(uint32_t timeout)
         return BT_STATUS_FAIL;
     }
 
-    bt_status_t status = bt_sal_start_discovery(PRIMARY_ADAPTER, timeout);
+    adapter_remove_found_devices();
+
+    bt_status_t status = bt_sal_start_discovery(PRIMARY_ADAPTER, timeout, is_limited);
     if (status != BT_STATUS_SUCCESS) {
         adapter_unlock();
         return status;
@@ -1965,6 +2032,8 @@ bt_status_t adapter_cancel_discovery(void)
         adapter_unlock();
         return BT_STATUS_NOT_ENABLED;
     }
+
+    // adapter_remove_found_devices();
 
     if (!adapter->is_discovering) {
         adapter_unlock();
@@ -2236,6 +2305,44 @@ uint32_t adapter_get_le_io_capability(void)
 #else
     return 0;
 #endif
+}
+
+static bt_status_t adapter_set_pts_mode(bool enable)
+{
+    adapter_service_t* adapter = &g_adapter_service;
+
+    BT_LOGD("%s, enable:%d", __func__, enable);
+
+    adapter_lock();
+    adapter->is_pts_mode = enable;
+    adapter_unlock();
+
+    return BT_STATUS_SUCCESS;
+}
+
+bool adapter_get_pts_mode(void)
+{
+    adapter_service_t* adapter = &g_adapter_service;
+    bool is_pts_mode;
+
+    adapter_lock();
+    is_pts_mode = adapter->is_pts_mode;
+    adapter_unlock();
+
+    return is_pts_mode;
+}
+
+bt_status_t adapter_set_debug_mode(bt_debug_mode_t mode, uint8_t operation)
+{
+    switch (mode) {
+    case BT_DEBUG_MODE_PTS: {
+        adapter_set_pts_mode(operation);
+    } break;
+    default:
+        return BT_STATUS_PARM_INVALID;
+    }
+
+    return BT_STATUS_SUCCESS;
 }
 
 bt_status_t adapter_set_le_appearance(uint16_t appearance)
@@ -2657,6 +2764,26 @@ bt_status_t adapter_disconnect(bt_address_t* addr)
     return BT_STATUS_SUCCESS;
 }
 
+bt_status_t adapter_disconnect_safe(void)
+{
+    bt_device_t* device;
+    bt_list_node_t* node;
+    adapter_service_t* adapter = &g_adapter_service;
+
+    /* check acls connection is all disconnected in safe disable mode */
+    if (adapter_check_acl_all_disconnected()) {
+        send_to_state_machine((state_machine_t*)adapter->stm, BREDR_ACL_ALL_DISCONNECTED, NULL);
+        return BT_STATUS_SUCCESS;
+    }
+
+    for (node = bt_list_head(g_adapter_service.devices); node != NULL; node = bt_list_next(g_adapter_service.devices, node)) {
+        device = (bt_device_t*)bt_list_node(node);
+        adapter_disconnect(device_get_address(device));
+    }
+
+    return BT_STATUS_SUCCESS;
+}
+
 bt_status_t adapter_le_connect(bt_address_t* addr,
     ble_addr_type_t type,
     ble_connect_params_t* param)
@@ -2825,6 +2952,49 @@ bt_status_t adapter_le_remove_whitelist(bt_address_t* addr)
 #else
     return BT_STATUS_NOT_SUPPORTED;
 #endif
+}
+
+bt_status_t adapter_le_set_bondable(bool bondable)
+{
+    adapter_service_t* adapter = &g_adapter_service;
+
+    adapter_lock();
+    if ((adapter->adapter_state != BT_ADAPTER_STATE_ON)
+        && (adapter->adapter_state != BT_ADAPTER_STATE_BLE_ON)) {
+        adapter_unlock();
+        return BT_STATUS_NOT_ENABLED;
+    }
+
+    adapter_unlock();
+    return bt_sal_le_set_bondable(PRIMARY_ADAPTER, bondable);
+}
+
+bt_status_t adapter_set_security_level(uint8_t level, bt_transport_t transport)
+{
+    adapter_service_t* adapter = &g_adapter_service;
+
+    adapter_lock();
+    if ((adapter->adapter_state != BT_ADAPTER_STATE_ON)
+        && (adapter->adapter_state != BT_ADAPTER_STATE_BLE_ON)) {
+        adapter_unlock();
+        return BT_STATUS_NOT_ENABLED;
+    }
+
+    adapter_unlock();
+
+#ifdef CONFIG_BLUETOOTH_BLE_SUPPORT
+    if (transport == BT_TRANSPORT_BLE) {
+        return bt_sal_le_set_security_level(PRIMARY_ADAPTER, level);
+    }
+#endif
+
+#ifdef CONFIG_BLUETOOTH_BREDR_SUPPORT
+    if (transport == BT_TRANSPORT_BREDR) {
+        return bt_sal_set_security_level(PRIMARY_ADAPTER, level);
+    }
+#endif
+
+    return BT_STATUS_NOT_SUPPORTED;
 }
 
 bt_status_t adapter_create_bond(bt_address_t* addr, bt_transport_t transport)

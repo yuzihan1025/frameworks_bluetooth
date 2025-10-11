@@ -599,6 +599,14 @@ if (bt_adapter_disable(ins) == BT_STATUS_SUCCESS) {
 bt_status_t BTSYMBOLS(bt_adapter_disable)(bt_instance_t* ins);
 
 /**
+ * @brief Disable bluetooth adapter safely
+ *
+ * @param ins - bluetooth client instance.
+ * @return bt_status_t - BT_STATUS_SUCCESS on success, a negated errno value on failure.
+ */
+bt_status_t BTSYMBOLS(bt_adapter_disable_safe)(bt_instance_t* ins);
+
+/**
  * @brief Enable BLE (Bluetooth Low Energy).
  *
  * Turns on the BLE functionality of the adapter.
@@ -647,6 +655,17 @@ bt_device_type_t BTSYMBOLS(bt_adapter_get_type)(bt_instance_t* ins);
  * @return bt_status_t - BT_STATUS_UNSUPPORTED.
  */
 bt_status_t BTSYMBOLS(bt_adapter_set_discovery_filter)(bt_instance_t* ins);
+
+/**
+ * @brief Start device limited discovery.
+ *
+ * Initiates the device limited discovery process to find nearby Bluetooth devices.
+ *
+ * @param ins - Bluetooth client instance, see @ref bt_instance_t.
+ * @param timeout - Maximum amount of time to perform discovery (Time = N * 1.28s, Range: 1.28s to 61.44s).
+ * @return bt_status_t - BT_STATUS_SUCCESS on success; a negative error code on failure.
+ */
+bt_status_t BTSYMBOLS(bt_adapter_start_limited_discovery)(bt_instance_t* ins, uint32_t timeout);
 
 /**
  * @brief Start device discovery.
@@ -895,6 +914,18 @@ bt_status_t BTSYMBOLS(bt_adapter_set_inquiry_scan_parameters)(bt_instance_t* ins
  */
 bt_status_t BTSYMBOLS(bt_adapter_set_page_scan_parameters)(bt_instance_t* ins, bt_scan_type_t type,
     uint16_t interval, uint16_t window);
+
+/**
+ * @brief Set operation to specific debug mode. e.g. BT_DEBUG_MODE_PTS
+ *
+ * Sets the adapter to test mode.
+ *
+ * @param ins - Bluetooth client instance, see @ref bt_instance_t.
+ * @param mode - test mode, see @ref bt_debug_mode_t.
+ * @param operation - operation for debug mode.
+ * @return bt_status_t - BT_STATUS_SUCCESS on success; a negative error code on failure.
+ */
+bt_status_t BTSYMBOLS(bt_adapter_set_debug_mode)(bt_instance_t* ins, bt_debug_mode_t mode, uint8_t operation);
 
 /**
  * @brief Get the list of bonded devices.

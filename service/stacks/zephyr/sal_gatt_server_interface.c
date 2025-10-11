@@ -32,7 +32,7 @@
 #include "service_loop.h"
 #include "utils/log.h"
 
-#ifdef CONFIG_BLUETOOTH_GATT
+#ifdef CONFIG_BLUETOOTH_GATT_SERVER
 
 #ifndef CONFIG_GATT_SERVER_MAX_SERVICES
 #define CONFIG_GATT_SERVER_MAX_SERVICES 10
@@ -49,11 +49,13 @@
 #define NEXT_DB_ATTR(attr) (attr + 1)
 #define LAST_DB_ATTR (server_db + (attr_count - 1))
 
-#define GATT_PERM_MASK (BT_GATT_PERM_READ | BT_GATT_PERM_READ_AUTHEN | BT_GATT_PERM_READ_ENCRYPT | BT_GATT_PERM_WRITE | BT_GATT_PERM_WRITE_AUTHEN | BT_GATT_PERM_WRITE_ENCRYPT | BT_GATT_PERM_PREPARE_WRITE)
+#define GATT_PERM_MASK (BT_GATT_PERM_READ | BT_GATT_PERM_READ_AUTHEN \
+    | BT_GATT_PERM_READ_ENCRYPT | BT_GATT_PERM_READ_LESC             \
+    | BT_GATT_PERM_WRITE | BT_GATT_PERM_WRITE_AUTHEN                 \
+    | BT_GATT_PERM_WRITE_ENCRYPT | BT_GATT_PERM_WRITE_LESC | BT_GATT_PERM_PREPARE_WRITE)
+
 #define GATT_PERM_ENC_READ_MASK (BT_GATT_PERM_READ_ENCRYPT | BT_GATT_PERM_READ_AUTHEN)
 #define GATT_PERM_ENC_WRITE_MASK (BT_GATT_PERM_WRITE_ENCRYPT | BT_GATT_PERM_WRITE_AUTHEN)
-#define GATT_PERM_READ_AUTHORIZATION 0x40
-#define GATT_PERM_WRITE_AUTHORIZATION 0x80
 
 #define GATT_OPS_WRITE_REQUEST 0 /* not used */
 
@@ -83,7 +85,7 @@ struct add_descriptor {
 struct add_characteristic {
     uint16_t char_id;
     uint8_t properties;
-    uint8_t permissions;
+    uint16_t permissions;
     const struct bt_uuid* uuid;
     uint32_t attr_length;
     uint8_t* attr_data;
@@ -152,9 +154,20 @@ static struct bt_gatt_attr server_db[CONFIG_GATT_SERVER_MAX_ATTRIBUTES];
 static ssize_t read_value(struct bt_conn* conn, const struct bt_gatt_attr* attr,
     void* buf, uint16_t len, uint16_t offset)
 {
+    uint16_t pts_read_size;
     struct gatt_value* user_data = attr->user_data;
 
     BT_LOGD("%s, handle:0x%0x, user_data 0x%p, user_data_len:%d", __func__, attr->handle, user_data, user_data->len);
+
+    if (bt_uuid_cmp(attr->uuid, BT_UUID_DECLARE_16(0xFF06)) == 0) {
+        pts_read_size = bt_gatt_get_mtu(conn) - 1;
+        static uint8_t s_fake[512] = { 0 };
+        if (pts_read_size <= 512) {
+            memset(s_fake, 0xAA, pts_read_size);
+        }
+
+        return bt_gatt_attr_read(conn, attr, buf, len, offset, s_fake, pts_read_size);
+    }
 
     return bt_gatt_attr_read(conn, attr, buf, len, offset, user_data->data, user_data->len);
 }
@@ -335,6 +348,39 @@ static int alloc_characteristic(struct add_characteristic* ch)
     return 0;
 }
 
+static uint16_t covert_gatt_permission(uint16_t elem_perm)
+{
+    int chr_perm = 0;
+
+    if (elem_perm & GATT_PERM_READ) {
+        chr_perm |= BT_GATT_PERM_READ;
+        if (elem_perm & GATT_PERM_AUTHEN_REQUIRED) {
+            chr_perm |= BT_GATT_PERM_READ_AUTHEN;
+        }
+        if (elem_perm & GATT_PERM_ENCRYPT_REQUIRED) {
+            chr_perm |= BT_GATT_PERM_READ_ENCRYPT;
+        }
+        if (elem_perm & GATT_PERM_MITM_REQUIRED) {
+            chr_perm |= BT_GATT_PERM_READ_LESC;
+        }
+    }
+
+    if (elem_perm & GATT_PERM_WRITE) {
+        chr_perm |= BT_GATT_PERM_WRITE;
+        if (elem_perm & GATT_PERM_AUTHEN_REQUIRED) {
+            chr_perm |= BT_GATT_PERM_WRITE_AUTHEN;
+        }
+        if (elem_perm & GATT_PERM_ENCRYPT_REQUIRED) {
+            chr_perm |= BT_GATT_PERM_WRITE_ENCRYPT;
+        }
+        if (elem_perm & GATT_PERM_MITM_REQUIRED) {
+            chr_perm |= BT_GATT_PERM_WRITE_LESC;
+        }
+    }
+
+    return chr_perm;
+}
+
 static void add_characteristic(gatt_element_t* element)
 {
     struct add_characteristic chr = { 0 };
@@ -345,7 +391,7 @@ static void add_characteristic(gatt_element_t* element)
         return;
     }
 
-    chr.permissions = element->permissions;
+    chr.permissions = covert_gatt_permission(element->permissions);
     chr.properties = element->properties;
     chr.uuid = &u.uuid;
     chr.attr_length = element->attr_length;
@@ -469,7 +515,7 @@ static void add_descriptor(gatt_element_t* element)
         return;
     }
 
-    desc.permissions = element->permissions;
+    desc.permissions = covert_gatt_permission(element->permissions);
     desc.properties = element->properties;
     desc.uuid = &u.uuid;
     desc.element = element;
@@ -1057,4 +1103,4 @@ void bt_sal_gatt_server_connection_state_changed_callback(bt_controller_id_t id,
     if_gatts_on_connection_state_changed(addr, state);
 }
 
-#endif /* CONFIG_BLUETOOTH_GATT*/
+#endif /* CONFIG_BLUETOOTH_GATT_SERVER */

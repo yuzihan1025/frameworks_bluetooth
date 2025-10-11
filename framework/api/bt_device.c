@@ -111,12 +111,20 @@ bt_status_t BTSYMBOLS(bt_device_disconnect)(bt_instance_t* ins, bt_address_t* ad
 
 bt_status_t BTSYMBOLS(bt_device_background_connect)(bt_instance_t* ins, bt_address_t* addr, bt_transport_t transport)
 {
+#ifdef CONFIG_BLUETOOTH_CONNECTION_MANAGER
     return bt_cm_device_connect(addr, transport);
+#else
+    return BT_STATUS_UNSUPPORTED;
+#endif
 }
 
 bt_status_t BTSYMBOLS(bt_device_background_disconnect)(bt_instance_t* ins, bt_address_t* addr, bt_transport_t transport)
 {
+#ifdef CONFIG_BLUETOOTH_CONNECTION_MANAGER
     return bt_cm_device_disconnect(addr, transport);
+#else
+    return BT_STATUS_UNSUPPORTED;
+#endif
 }
 
 bt_status_t BTSYMBOLS(bt_device_connect_le)(bt_instance_t* ins,
@@ -155,6 +163,16 @@ bt_status_t BTSYMBOLS(bt_device_set_le_phy)(bt_instance_t* ins, bt_address_t* ad
 bt_status_t BTSYMBOLS(bt_device_create_bond)(bt_instance_t* ins, bt_address_t* addr, bt_transport_t transport)
 {
     return adapter_create_bond(addr, transport);
+}
+
+bt_status_t BTSYMBOLS(bt_device_set_security_level)(bt_instance_t* ins, uint8_t level, bt_transport_t transport)
+{
+    return adapter_set_security_level(level, transport);
+}
+
+bt_status_t BTSYMBOLS(bt_device_set_bondable_le)(bt_instance_t* ins, bool bondable)
+{
+    return adapter_le_set_bondable(bondable);
 }
 
 bt_status_t BTSYMBOLS(bt_device_remove_bond)(bt_instance_t* ins, bt_address_t* addr, uint8_t transport)
@@ -205,10 +223,18 @@ bt_status_t BTSYMBOLS(bt_device_get_le_sc_local_oob_data)(bt_instance_t* ins, bt
 
 bt_status_t BTSYMBOLS(bt_device_enable_enhanced_mode)(bt_instance_t* ins, bt_address_t* addr, bt_enhanced_mode_t mode)
 {
+#ifdef CONFIG_BLUETOOTH_CONNECTION_MANAGER
     return bt_cm_enable_enhanced_mode(addr, mode);
+#else
+    return BT_STATUS_UNSUPPORTED;
+#endif
 }
 
 bt_status_t BTSYMBOLS(bt_device_disable_enhanced_mode)(bt_instance_t* ins, bt_address_t* addr, bt_enhanced_mode_t mode)
 {
+#ifdef CONFIG_BLUETOOTH_CONNECTION_MANAGER
     return bt_cm_disable_enhanced_mode(addr, mode);
+#else
+    return BT_STATUS_UNSUPPORTED;
+#endif
 }
